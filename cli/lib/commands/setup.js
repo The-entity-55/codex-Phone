@@ -234,7 +234,7 @@ async function setupInstallationType(installationType, existingConfig, isPi, opt
     console.log(chalk.gray('To start the API server:'));
     console.log(chalk.gray('  claude-phone start\n'));
     console.log(chalk.gray(`The API server will listen on port ${config.server.claudeApiPort}.`));
-    console.log(chalk.gray('Voice servers can connect to: http://YOUR_IP:' + config.server.claudeApiPort + '\n'));
+    console.log(chalk.gray(`Local API endpoint: http://localhost:${config.server.claudeApiPort}\n`));
   } else if (installationType === 'voice-server') {
     if (isPi) {
       console.log(chalk.bold.cyan('📋 API server instructions:\n'));
