@@ -4,13 +4,13 @@
 
 # Claude Phone
 
-Voice interface for Claude Code via SIP/3CX. Call your AI, and your AI can call you.
+Voice interface for Codex via SIP/3CX. Call your AI, and your AI can call you.
 
 ## What is this?
 
-Claude Phone gives your Claude Code installation a phone number. You can:
+Claude Phone gives your Codex installation a phone number. You can:
 
-- **Inbound**: Call an extension and talk to Claude - run commands, check status, ask questions
+- **Inbound**: Call an extension and talk to Codex - run commands, check status, ask questions
 - **Outbound**: Your server can call YOU with alerts, then have a conversation about what to do
 
 ## Prerequisites
@@ -18,9 +18,9 @@ Claude Phone gives your Claude Code installation a phone number. You can:
 | Requirement | Where to Get It | Notes |
 |-------------|-----------------|-------|
 | **3CX Cloud Account** | [3cx.com](https://www.3cx.com/) | Free tier works |
-| **ElevenLabs API Key** | [elevenlabs.io](https://elevenlabs.io/) | For text-to-speech |
+| **Gemini API Key** | [aistudio.google.com](https://aistudio.google.com/) | For text-to-speech |
 | **OpenAI API Key** | [platform.openai.com](https://platform.openai.com/) | For Whisper speech-to-text |
-| **Claude Code CLI** | [claude.ai/code](https://claude.ai/code) | Requires Claude Max subscription |
+| **Codex CLI** | [developers.openai.com/codex](https://developers.openai.com/codex) | Agent backend for voice requests |
 
 ## Platform Support
 
@@ -28,14 +28,20 @@ Claude Phone gives your Claude Code installation a phone number. You can:
 |----------|--------|
 | **macOS** | Fully supported |
 | **Linux** | Fully supported (including Raspberry Pi) |
-| **Windows** | Not supported (may work with WSL) |
+| **Windows** | Experimental |
 
 ## Quick Start
 
 ### 1. Install
 
+**macOS/Linux:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/theNetworkChuck/claude-phone/main/install.sh | bash
+```
+
+**Windows PowerShell (experimental):**
+```powershell
+irm https://raw.githubusercontent.com/theNetworkChuck/claude-phone/main/install.ps1 | iex
 ```
 
 The installer will:
@@ -46,6 +52,12 @@ The installer will:
 
 ### 2. Setup
 
+Sign in to Codex first:
+```bash
+codex login
+```
+
+Then run the Claude Phone setup wizard:
 ```bash
 claude-phone setup
 ```
@@ -55,7 +67,7 @@ The setup wizard asks what you're installing:
 | Type | Use Case | What It Configures |
 |------|----------|-------------------|
 | **Voice Server** | Pi or dedicated voice box | Docker containers, connects to remote API server |
-| **API Server** | Mac/Linux with Claude Code | Just the Claude API wrapper |
+| **API Server** | Machine with Codex CLI | Just the Codex API wrapper |
 | **Both** | All-in-one single machine | Everything on one box |
 
 ### 3. Start
@@ -68,7 +80,7 @@ claude-phone start
 
 ### All-in-One (Single Machine)
 
-Best for: Mac or Linux server that's always on and has Claude Code installed.
+Best for: a Mac, Linux, or Windows server that's always on and has Codex CLI installed.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -84,7 +96,7 @@ Best for: Mac or Linux server that's always on and has Claude Code installed.
 │  │     Single Server (Mac/Linux)                │           │
 │  │  ┌───────────┐    ┌───────────────────┐    │           │
 │  │  │ voice-app │ ←→ │ claude-api-server │    │           │
-│  │  │ (Docker)  │    │ (Claude Code CLI) │    │           │
+│  │  │ (Docker)  │    │ (Codex CLI)       │    │           │
 │  │  └───────────┘    └───────────────────┘    │           │
 │  └─────────────────────────────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
@@ -98,7 +110,7 @@ claude-phone start    # Launches Docker + API server
 
 ### Split Mode (Pi + API Server)
 
-Best for: Dedicated Pi for voice services, Claude running on your main machine.
+Best for: Dedicated Pi for voice services, Codex running on your main machine.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -112,7 +124,7 @@ Best for: Dedicated Pi for voice services, Claude running on your main machine.
 │         ↓                                                    │
 │  ┌─────────────┐         ┌─────────────────────┐           │
 │  │ Raspberry Pi │   ←→   │ Mac/Linux with      │           │
-│  │ (voice-app)  │  HTTP  │ Claude Code CLI     │           │
+│  │ (voice-app)  │  HTTP  │ Codex CLI           │           │
 │  └─────────────┘         │ (claude-api-server) │           │
 │                          └─────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
@@ -126,7 +138,7 @@ claude-phone start    # Launches Docker containers
 
 **On your Mac/Linux (API Server):**
 ```bash
-claude-phone api-server    # Starts Claude API wrapper on port 3333
+claude-phone api-server    # Starts Codex API wrapper on port 3333
 ```
 
 Note: On the API server machine, you don't need to run `claude-phone setup` first - the `api-server` command works standalone.

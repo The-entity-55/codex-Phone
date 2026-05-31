@@ -13,7 +13,7 @@ import { savePid, removePid } from '../process-manager.js';
  * @returns {Promise<void>}
  */
 export async function apiServerCommand(options = {}) {
-  console.log(chalk.bold.cyan('\n🤖 Claude API Server\n'));
+  console.log(chalk.bold.cyan('\n🤖 Codex API Server\n'));
 
   // Load config to get port if not provided
   let port = options.port;
@@ -26,7 +26,7 @@ export async function apiServerCommand(options = {}) {
   }
 
   console.log(chalk.gray(`Starting API server on port ${port}...`));
-  console.log(chalk.gray('This wraps Claude Code CLI for Pi connections.\n'));
+  console.log(chalk.gray('This wraps Codex CLI for Pi connections.\n'));
 
   const projectRoot = getProjectRoot();
   const serverPath = path.join(projectRoot, 'claude-api-server', 'server.js');

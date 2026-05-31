@@ -11,7 +11,7 @@ import {
   configExists
 } from '../config.js';
 import {
-  validateElevenLabsKey,
+  validateGeminiKey,
   validateOpenAIKey,
   validateVoiceId,
   validateExtension,
@@ -42,7 +42,7 @@ async function promptInstallationType(currentType = 'both') {
         value: 'voice-server'
       },
       {
-        name: 'API Server - Claude Code wrapper, minimal setup',
+        name: 'API Server - Codex wrapper, minimal setup',
         value: 'api-server'
       },
       {
@@ -240,7 +240,7 @@ async function setupInstallationType(installationType, existingConfig, isPi, opt
       console.log(chalk.bold.cyan('📋 API server instructions:\n'));
       console.log(chalk.gray('  On your API server, run:'));
       console.log(chalk.white(`    claude-phone api-server --port ${config.server.claudeApiPort}\n`));
-      console.log(chalk.gray('  This starts the Claude API wrapper that the Pi will connect to.\n'));
+      console.log(chalk.gray('  This starts the Codex API wrapper that the Pi will connect to.\n'));
       console.log(chalk.bold.cyan('📋 Pi-side next steps:\n'));
       console.log(chalk.gray('  1. Run "claude-phone start" to launch voice-app'));
       console.log(chalk.gray('  2. Call extension ' + config.devices[0].extension + ' from your phone'));
@@ -457,7 +457,7 @@ async function setupPi(config) {
   if (config.deployment && config.deployment.mode === 'standard') {
     console.log(chalk.yellow('\n⚠️  Detected existing standard configuration'));
     console.log(chalk.gray('Your config will be migrated to Pi split-mode while preserving:'));
-    console.log(chalk.gray('  • API keys (ElevenLabs, OpenAI)'));
+    console.log(chalk.gray('  • API keys (Gemini, OpenAI)'));
     console.log(chalk.gray('  • Device configurations'));
     console.log(chalk.gray('  • SIP settings\n'));
 
@@ -580,7 +580,7 @@ async function setupPi(config) {
     {
       type: 'input',
       name: 'claudeApiPort',
-      message: 'Claude API server port:',
+      message: 'Codex API server port:',
       default: String(config.server?.claudeApiPort || 3333),
       validate: (input) => {
         const port = parseInt(input, 10);
@@ -644,7 +644,7 @@ async function setupPi(config) {
   console.log(chalk.bold.cyan('📋 API server instructions:\n'));
   console.log(chalk.gray('  On your API server, run:'));
   console.log(chalk.white(`    claude-phone api-server --port ${config.server.claudeApiPort}\n`));
-  console.log(chalk.gray('  This starts the Claude API wrapper that the Pi will connect to.\n'));
+  console.log(chalk.gray('  This starts the Codex API wrapper that the Pi will connect to.\n'));
   console.log(chalk.bold.cyan('📋 Pi-side next steps:\n'));
   console.log(chalk.gray('  1. Run "claude-phone start" to launch voice-app'));
   console.log(chalk.gray('  2. Call extension ' + config.devices[0].extension + ' from your phone'));
@@ -669,7 +669,7 @@ function createDefaultConfig() {
   return {
     version: '1.0.0',
     api: {
-      elevenlabs: { apiKey: '', defaultVoiceId: '', validated: false },
+      gemini: { apiKey: '', defaultVoiceName: 'Kore', validated: false },
       openai: { apiKey: '', validated: false }
     },
     sip: {
@@ -700,13 +700,21 @@ function createDefaultConfig() {
  * @returns {Promise<object>} Updated config
  */
 async function setupAPIKeys(config) {
-  // ElevenLabs API Key
-  const elevenLabsAnswers = await inquirer.prompt([
+  config.api = config.api || {};
+  config.api.gemini = config.api.gemini || {
+    apiKey: config.api.elevenlabs?.apiKey || '',
+    defaultVoiceName: config.api.elevenlabs?.defaultVoiceId || 'Kore',
+    validated: config.api.elevenlabs?.validated || false
+  };
+  config.api.openai = config.api.openai || { apiKey: '', validated: false };
+
+  // Gemini API Key
+  const geminiAnswers = await inquirer.prompt([
     {
       type: 'password',
       name: 'apiKey',
-      message: 'ElevenLabs API key:',
-      default: config.api.elevenlabs.apiKey,
+      message: 'Gemini API key (for TTS):',
+      default: config.api.gemini.apiKey,
       validate: (input) => {
         if (!input || input.trim() === '') {
           return 'API key is required';
@@ -716,12 +724,12 @@ async function setupAPIKeys(config) {
     }
   ]);
 
-  const elevenLabsKey = elevenLabsAnswers.apiKey;
-  const spinner = ora('Validating ElevenLabs API key...').start();
+  const geminiKey = geminiAnswers.apiKey;
+  const spinner = ora('Validating Gemini API key...').start();
 
-  const elevenLabsResult = await validateElevenLabsKey(elevenLabsKey);
-  if (!elevenLabsResult.valid) {
-    spinner.fail(`Invalid ElevenLabs API key: ${elevenLabsResult.error}`);
+  const geminiResult = await validateGeminiKey(geminiKey);
+  if (!geminiResult.valid) {
+    spinner.fail(`Invalid Gemini API key: ${geminiResult.error}`);
     console.log(chalk.yellow('\n⚠️  You can continue setup, but the key may not work.'));
     const { continueAnyway } = await inquirer.prompt([
       {
@@ -736,35 +744,35 @@ async function setupAPIKeys(config) {
       throw new Error('Setup cancelled due to invalid API key');
     }
 
-    config.api.elevenlabs = { apiKey: elevenLabsKey, defaultVoiceId: '', validated: false };
+    config.api.gemini = { apiKey: geminiKey, defaultVoiceName: 'Kore', validated: false };
   } else {
-    spinner.succeed('ElevenLabs API key validated');
-    config.api.elevenlabs = { apiKey: elevenLabsKey, defaultVoiceId: '', validated: true };
+    spinner.succeed('Gemini API key validated');
+    config.api.gemini = { apiKey: geminiKey, defaultVoiceName: 'Kore', validated: true };
   }
 
-  // Ask for default voice ID immediately after API key
-  const voiceIdAnswers = await inquirer.prompt([
+  // Ask for default Gemini voice name immediately after API key
+  const voiceNameAnswers = await inquirer.prompt([
     {
       type: 'input',
-      name: 'voiceId',
-      message: 'ElevenLabs default voice ID (for all devices):',
-      default: config.api.elevenlabs.defaultVoiceId || '',
+      name: 'voiceName',
+      message: 'Gemini default voice name (for all devices):',
+      default: config.api.gemini.defaultVoiceName || 'Kore',
       validate: (input) => {
         if (!input || input.trim() === '') {
-          return 'Voice ID is required';
+          return 'Voice name is required';
         }
         return true;
       }
     }
   ]);
 
-  const defaultVoiceId = voiceIdAnswers.voiceId;
-  const voiceSpinner = ora('Validating ElevenLabs voice ID...').start();
+  const defaultVoiceName = voiceNameAnswers.voiceName;
+  const voiceSpinner = ora('Validating Gemini voice name...').start();
 
-  const voiceValidation = await validateVoiceId(elevenLabsKey, defaultVoiceId);
+  const voiceValidation = await validateVoiceId(geminiKey, defaultVoiceName);
   if (!voiceValidation.valid) {
-    voiceSpinner.fail(`Voice ID validation failed: ${voiceValidation.error}`);
-    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice ID may not work.'));
+    voiceSpinner.fail(`Voice name validation failed: ${voiceValidation.error}`);
+    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice name may not work.'));
     const { continueAnyway } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -775,13 +783,13 @@ async function setupAPIKeys(config) {
     ]);
 
     if (!continueAnyway) {
-      throw new Error('Setup cancelled due to invalid voice ID');
+      throw new Error('Setup cancelled due to invalid voice name');
     }
 
-    config.api.elevenlabs.defaultVoiceId = defaultVoiceId;
+    config.api.gemini.defaultVoiceName = defaultVoiceName;
   } else {
-    voiceSpinner.succeed(`Voice ID validated: ${voiceValidation.name}`);
-    config.api.elevenlabs.defaultVoiceId = defaultVoiceId;
+    voiceSpinner.succeed(`Voice name validated: ${voiceValidation.name}`);
+    config.api.gemini.defaultVoiceName = defaultVoiceName;
   }
 
   // OpenAI API Key
@@ -971,11 +979,11 @@ async function setupDevice(config) {
     {
       type: 'input',
       name: 'voiceId',
-      message: 'ElevenLabs voice ID:',
-      default: existingDevice?.voiceId || config.api.elevenlabs.defaultVoiceId || '',
+      message: 'Gemini voice name:',
+      default: existingDevice?.voiceId || config.api.gemini?.defaultVoiceName || 'Kore',
       validate: (input) => {
         if (!input || input.trim() === '') {
-          return 'Voice ID is required';
+          return 'Voice name is required';
         }
         return true;
       }
@@ -994,13 +1002,13 @@ async function setupDevice(config) {
     }
   ]);
 
-  // Validate voice ID with ElevenLabs API
-  const voiceSpinner = ora('Validating ElevenLabs voice ID...').start();
-  const voiceValidation = await validateVoiceId(config.api.elevenlabs.apiKey, answers.voiceId);
+  // Validate voice name against Gemini's supported prebuilt voices
+  const voiceSpinner = ora('Validating Gemini voice name...').start();
+  const voiceValidation = await validateVoiceId(config.api.gemini?.apiKey, answers.voiceId);
 
   if (!voiceValidation.valid) {
-    voiceSpinner.fail(`Voice ID validation failed: ${voiceValidation.error}`);
-    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice ID may not work.'));
+    voiceSpinner.fail(`Voice name validation failed: ${voiceValidation.error}`);
+    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice name may not work.'));
     const { continueAnyway } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -1011,12 +1019,12 @@ async function setupDevice(config) {
     ]);
 
     if (!continueAnyway) {
-      // Let user re-enter voice ID
+      // Let user re-enter voice name
       console.log(chalk.gray('\nReturning to device setup...'));
       return setupDevice(config);
     }
   } else {
-    voiceSpinner.succeed(`Voice ID validated: ${voiceValidation.name}`);
+    voiceSpinner.succeed(`Voice name validated: ${voiceValidation.name}`);
   }
 
   const device = {
@@ -1065,7 +1073,7 @@ async function setupServer(config) {
     {
       type: 'input',
       name: 'claudeApiPort',
-      message: 'Claude API server port:',
+      message: 'Codex API server port:',
       default: config.server.claudeApiPort,
       validate: (input) => {
         const port = parseInt(input, 10);

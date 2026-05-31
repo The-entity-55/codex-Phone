@@ -47,16 +47,21 @@ export function getLocalIP() {
 }
 
 /**
- * Check if Claude CLI is installed
+ * Check if Codex CLI is installed
  * @returns {Promise<boolean>}
  */
-export async function isClaudeInstalled() {
+export async function isCodexInstalled() {
   return new Promise((resolve) => {
-    const check = spawn('which', ['claude']);
+    const command = process.platform === 'win32' ? 'where' : 'which';
+    const check = spawn(command, ['codex']);
     check.on('close', (code) => {
       resolve(code === 0);
     });
   });
+}
+
+export async function isClaudeInstalled() {
+  return isCodexInstalled();
 }
 
 /**

@@ -131,7 +131,7 @@ test('docker compose generation', async (t) => {
         }
       ],
       api: {
-        elevenlabs: { apiKey: 'elev-key' },
+        gemini: { apiKey: 'gemini-key', defaultVoiceName: 'Kore' },
         openai: { apiKey: 'openai-key' }
       },
       secrets: {
@@ -151,6 +151,10 @@ test('docker compose generation', async (t) => {
     // Should use Mac API URL instead of localhost
     assert.ok(envFile.includes('CLAUDE_API_URL=http://192.168.1.100:3333'),
       'Should use Mac API URL for pi-split mode');
+    assert.ok(envFile.includes('GEMINI_API_KEY=gemini-key'),
+      'Should write Gemini API key');
+    assert.ok(envFile.includes('GEMINI_TTS_VOICE=voice-id'),
+      'Should write Gemini voice name');
     assert.ok(!envFile.includes('CLAUDE_API_URL=http://localhost:'),
       'Should not use localhost for pi-split mode');
   });
@@ -175,7 +179,7 @@ test('docker compose generation', async (t) => {
         }
       ],
       api: {
-        elevenlabs: { apiKey: 'elev-key' },
+        gemini: { apiKey: 'gemini-key', defaultVoiceName: 'Kore' },
         openai: { apiKey: 'openai-key' }
       },
       secrets: {
@@ -214,7 +218,7 @@ test('docker compose generation', async (t) => {
         }
       ],
       api: {
-        elevenlabs: { apiKey: 'elev-key' },
+        gemini: { apiKey: 'gemini-key', defaultVoiceName: 'Kore' },
         openai: { apiKey: 'openai-key' }
       },
       secrets: {
@@ -257,7 +261,7 @@ test('docker compose generation', async (t) => {
         }
       ],
       api: {
-        elevenlabs: { apiKey: 'elev-key' },
+        gemini: { apiKey: 'gemini-key', defaultVoiceName: 'Kore' },
         openai: { apiKey: 'openai-key' }
       },
       secrets: {

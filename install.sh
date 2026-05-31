@@ -205,12 +205,12 @@ if [ "$OS" = "Linux" ]; then
   fi
 fi
 
-# Check Claude CLI (optional - only needed for API server)
-if ! command -v claude &> /dev/null; then
-  echo "⚠️  Claude CLI not found (needed for API server only)"
-  echo "  Install from: https://claude.ai/download"
+# Check Codex CLI (optional - only needed for API server)
+if ! command -v codex &> /dev/null; then
+  echo "⚠️  Codex CLI not found (needed for API server only)"
+  echo "  Install Codex CLI, then run: codex login"
 else
-  echo "✓ Claude CLI installed"
+  echo "✓ Codex CLI installed"
 fi
 
 # Clone or update repository

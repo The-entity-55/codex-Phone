@@ -1,14 +1,14 @@
 /**
  * Claude HTTP API Server
  *
- * HTTP server that wraps Claude Code CLI with session management
+ * HTTP server that wraps Codex CLI with voice-call session context
  * Runs on the API server to handle voice interface queries
  *
  * Usage:
  *   node server.js
  *
  * Endpoints:
- *   POST /ask - Send a prompt to Claude (with optional callId for session)
+ *   POST /ask - Send a prompt to the configured agent (with optional callId)
  *   POST /end-session - Clean up session for a call
  *   GET /health - Health check
  */
@@ -17,6 +17,7 @@ const express = require('express');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const {
   buildQueryContext,
   buildStructuredPrompt,
@@ -27,34 +28,45 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 3333;
+const AGENT_PROVIDER = (process.env.AGENT_PROVIDER || process.env.AI_BACKEND || 'codex').toLowerCase();
 
 /**
- * Build the full environment that Claude Code expects
- * This mimics what happens when you run `claude` in a terminal
+ * Build the full environment that the local agent CLI expects.
+ * This mimics what happens when you run the CLI in a terminal
  * with your zsh profile fully loaded.
  */
-function buildClaudeEnvironment() {
-  const HOME = process.env.HOME || '/Users/networkchuck';
-  const PAI_DIR = path.join(HOME, '.claude');
+function buildAgentEnvironment() {
+  const HOME = process.env.HOME || process.env.USERPROFILE || os.homedir();
+  const claudeDir = path.join(HOME, '.claude');
+  const codexDir = process.env.CODEX_HOME || path.join(HOME, '.codex');
 
-  // Load ~/.claude/.env (all API keys)
-  const envPath = path.join(PAI_DIR, '.env');
-  const paiEnv = {};
-  if (fs.existsSync(envPath)) {
+  function loadDotEnv(envPath) {
+    const loaded = {};
+    if (!fs.existsSync(envPath)) {
+      return loaded;
+    }
+
     const envContent = fs.readFileSync(envPath, 'utf8');
     for (const line of envContent.split('\n')) {
       const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith('#')) {
         const [key, ...valueParts] = trimmed.split('=');
         if (key && valueParts.length > 0) {
-          paiEnv[key] = valueParts.join('=');
+          loaded[key] = valueParts.join('=');
         }
       }
     }
+    return loaded;
   }
+
+  const localEnv = {
+    ...loadDotEnv(path.join(claudeDir, '.env')),
+    ...loadDotEnv(path.join(codexDir, '.env'))
+  };
 
   // Build PATH like zsh profile does
   const fullPath = [
+    process.env.PATH || '',
     '/opt/homebrew/bin',
     '/opt/homebrew/opt/python@3.12/bin',
     '/opt/homebrew/opt/libpq/bin',
@@ -72,14 +84,15 @@ function buildClaudeEnvironment() {
     '/bin',
     '/usr/sbin',
     '/sbin'
-  ].join(':');
+  ].join(path.delimiter);
 
   const env = {
     ...process.env,
-    ...paiEnv,
+    ...localEnv,
     PATH: fullPath,
     HOME,
-    PAI_DIR,
+    CODEX_HOME: codexDir,
+    PAI_DIR: claudeDir,
     PAI_HOME: HOME,
     DA: 'Morpheus',
     DA_COLOR: 'purple',
@@ -100,25 +113,30 @@ function buildClaudeEnvironment() {
 }
 
 // Pre-build the environment once at startup
-const claudeEnv = buildClaudeEnvironment();
-console.log('[STARTUP] Loaded environment with', Object.keys(claudeEnv).length, 'variables');
-console.log('[STARTUP] PATH includes:', claudeEnv.PATH.split(':').slice(0, 5).join(', '), '...');
+const agentEnv = buildAgentEnvironment();
+console.log('[STARTUP] Agent provider:', AGENT_PROVIDER);
+console.log('[STARTUP] Loaded environment with', Object.keys(agentEnv).length, 'variables');
+console.log('[STARTUP] PATH includes:', agentEnv.PATH.split(path.delimiter).slice(0, 5).join(', '), '...');
 
 // Log which API keys are available (without showing values)
-const apiKeys = Object.keys(claudeEnv).filter(k =>
+const apiKeys = Object.keys(agentEnv).filter(k =>
   k.includes('API_KEY') || k.includes('TOKEN') || k.includes('SECRET') || k === 'PAI_DIR'
 );
 console.log('[STARTUP] API keys loaded:', apiKeys.join(', '));
 
-// Session storage: callId -> claudeSessionId
+// Session storage: callId -> { turns: [{ user, assistant }] }
 const sessions = new Map();
+const claudeSessions = new Map();
 
-// Model selection - Sonnet for balanced speed/quality
+// Model selection
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+const CODEX_MODEL = process.env.CODEX_MODEL || process.env.OPENAI_MODEL || 'gpt-5.5';
+const CODEX_WORKSPACE = process.env.CODEX_WORKSPACE || process.env.CODEX_ADDRESS_STRING || process.cwd();
+const ACTIVE_MODEL = AGENT_PROVIDER === 'claude' ? CLAUDE_MODEL : CODEX_MODEL;
 
-function parseClaudeStdout(stdout) {
+function parseAgentStdout(stdout) {
   // Claude Code CLI may output JSONL; when it does, extract the `result` message.
-  // Otherwise, fall back to raw stdout.
+  // Codex output is usually plain text when --output-last-message is used.
   let response = '';
   let sessionId = null;
 
@@ -144,6 +162,32 @@ function parseClaudeStdout(stdout) {
   return { response, sessionId };
 }
 
+function getSessionHistory(callId) {
+  if (!callId) return [];
+  return sessions.get(callId)?.turns || [];
+}
+
+function appendSessionTurn(callId, user, assistant) {
+  if (!callId) return;
+  const session = sessions.get(callId) || { turns: [] };
+  session.turns.push({ user, assistant });
+  session.turns = session.turns.slice(-8);
+  sessions.set(callId, session);
+}
+
+function addHistoryToPrompt(fullPrompt, callId) {
+  const turns = getSessionHistory(callId);
+  if (turns.length === 0) {
+    return fullPrompt;
+  }
+
+  const history = turns.map((turn, index) => {
+    return `Turn ${index + 1}\nCaller: ${turn.user}\nAssistant: ${turn.assistant}`;
+  }).join('\n\n');
+
+  return `[CALL HISTORY]\n${history}\n[END CALL HISTORY]\n\n${fullPrompt}`;
+}
+
 function runClaudeOnce({ fullPrompt, callId, timestamp }) {
   const startTime = Date.now();
 
@@ -154,12 +198,12 @@ function runClaudeOnce({ fullPrompt, callId, timestamp }) {
   ];
 
   if (callId) {
-    if (sessions.has(callId)) {
+    if (claudeSessions.has(callId)) {
       args.push('--resume', callId);
       console.log(`[${timestamp}] Resuming session: ${callId}`);
     } else {
       args.push('--session-id', callId);
-      sessions.set(callId, true);
+      claudeSessions.set(callId, true);
       console.log(`[${timestamp}] Starting new session: ${callId}`);
     }
   }
@@ -168,7 +212,7 @@ function runClaudeOnce({ fullPrompt, callId, timestamp }) {
     const claude = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
-      env: claudeEnv
+      env: agentEnv
     });
 
     let stdout = '';
@@ -187,6 +231,77 @@ function runClaudeOnce({ fullPrompt, callId, timestamp }) {
       resolve({ code, stdout, stderr, duration_ms });
     });
   });
+}
+
+function runCodexOnce({ fullPrompt }) {
+  const startTime = Date.now();
+  const outputPath = path.join(os.tmpdir(), `claude-phone-codex-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+  const args = [
+    'exec',
+    '--skip-git-repo-check',
+    '--sandbox', process.env.CODEX_SANDBOX || 'workspace-write',
+    '--ask-for-approval', process.env.CODEX_APPROVAL_POLICY || 'never',
+    '--output-last-message', outputPath
+  ];
+
+  if (CODEX_MODEL) {
+    args.push('--model', CODEX_MODEL);
+  }
+
+  if (CODEX_WORKSPACE) {
+    args.push('--cd', CODEX_WORKSPACE);
+  }
+
+  args.push('-');
+
+  return new Promise((resolve, reject) => {
+    const codex = spawn('codex', args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false,
+      env: agentEnv
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    codex.stdin.write(fullPrompt);
+    codex.stdin.end();
+    codex.stdout.on('data', (data) => { stdout += data.toString(); });
+    codex.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    codex.on('error', (error) => {
+      reject(error);
+    });
+
+    codex.on('close', (code) => {
+      const duration_ms = Date.now() - startTime;
+      let outputMessage = '';
+
+      try {
+        if (fs.existsSync(outputPath)) {
+          outputMessage = fs.readFileSync(outputPath, 'utf8').trim();
+          fs.unlinkSync(outputPath);
+        }
+      } catch (error) {
+        stderr += `\nFailed to read Codex output file: ${error.message}`;
+      }
+
+      resolve({
+        code,
+        stdout: outputMessage || stdout,
+        stderr,
+        duration_ms
+      });
+    });
+  });
+}
+
+function runAgentOnce({ fullPrompt, callId, timestamp }) {
+  if (AGENT_PROVIDER === 'claude') {
+    return runClaudeOnce({ fullPrompt, callId, timestamp });
+  }
+
+  return runCodexOnce({ fullPrompt: addHistoryToPrompt(fullPrompt, callId) });
 }
 
 /**
@@ -269,7 +384,8 @@ app.post('/ask', async (req, res) => {
   const existingSession = callId ? sessions.get(callId) : null;
 
   console.log(`[${timestamp}] QUERY: "${prompt.substring(0, 100)}..."`);
-  console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
+  console.log(`[${timestamp}] PROVIDER: ${AGENT_PROVIDER}`);
+  console.log(`[${timestamp}] MODEL: ${ACTIVE_MODEL}`);
   console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${existingSession || 'none'}`);
   console.log(`[${timestamp}] DEVICE PROMPT: ${devicePrompt ? 'Yes (' + devicePrompt.substring(0, 30) + '...)' : 'No'}`);
 
@@ -289,26 +405,23 @@ app.post('/ask', async (req, res) => {
     fullPrompt += VOICE_CONTEXT;
     fullPrompt += prompt;
 
-    const { code, stdout, stderr, duration_ms } = await runClaudeOnce({ fullPrompt, callId, timestamp });
+    const { code, stdout, stderr, duration_ms } = await runAgentOnce({ fullPrompt, callId, timestamp });
 
     if (code !== 0) {
-      console.error(`[${new Date().toISOString()}] ERROR: Claude CLI exited with code ${code}`);
+      console.error(`[${new Date().toISOString()}] ERROR: ${AGENT_PROVIDER} CLI exited with code ${code}`);
       console.error(`STDERR: ${stderr}`);
       console.error(`STDOUT: ${stdout.substring(0, 500)}`);
       const errorMsg = stderr || stdout || `Exit code ${code}`;
-      return res.json({ success: false, error: `Claude CLI failed: ${errorMsg}`, duration_ms });
+      return res.json({ success: false, error: `${AGENT_PROVIDER} CLI failed: ${errorMsg}`, duration_ms });
     }
 
-    const { response, sessionId } = parseClaudeStdout(stdout);
+    const { response } = parseAgentStdout(stdout);
 
-    if (sessionId && callId) {
-      sessions.set(callId, sessionId);
-      console.log(`[${new Date().toISOString()}] SESSION STORED: ${callId} -> ${sessionId}`);
-    }
+    appendSessionTurn(callId, prompt, response);
 
     console.log(`[${new Date().toISOString()}] RESPONSE (${duration_ms}ms): "${response.substring(0, 100)}..."`);
 
-    res.json({ success: true, response, sessionId, duration_ms });
+    res.json({ success: true, response, duration_ms });
 
   } catch (error) {
     const duration_ms = Date.now() - startTime;
@@ -377,7 +490,8 @@ app.post('/ask-structured', async (req, res) => {
   });
 
   console.log(`[${timestamp}] STRUCTURED QUERY: "${String(prompt).substring(0, 100)}..."`);
-  console.log(`[${timestamp}] MODEL: ${CLAUDE_MODEL}`);
+  console.log(`[${timestamp}] PROVIDER: ${AGENT_PROVIDER}`);
+  console.log(`[${timestamp}] MODEL: ${ACTIVE_MODEL}`);
   console.log(`[${timestamp}] SESSION: callId=${callId || 'none'}, existing=${callId ? (sessions.has(callId) ? 'yes' : 'no') : 'none'}`);
 
   try {
@@ -389,11 +503,11 @@ app.post('/ask-structured', async (req, res) => {
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       attemptsMade = attempt + 1;
-      const { code, stdout, stderr, duration_ms } = await runClaudeOnce({ fullPrompt, callId, timestamp });
+      const { code, stdout, stderr, duration_ms } = await runAgentOnce({ fullPrompt, callId, timestamp });
       totalDuration += duration_ms;
 
       if (code !== 0) {
-        lastError = `Claude CLI failed: ${stderr}`;
+        lastError = `${AGENT_PROVIDER} CLI failed: ${stderr}`;
         lastRaw = String(stdout || '').trim();
         return res.status(502).json({
           success: false,
@@ -404,10 +518,10 @@ app.post('/ask-structured', async (req, res) => {
         });
       }
 
-      const { response, sessionId } = parseClaudeStdout(stdout);
+      const { response } = parseAgentStdout(stdout);
       lastRaw = response;
 
-      if (sessionId && callId) sessions.set(callId, sessionId);
+      appendSessionTurn(callId, prompt, response);
 
       const parsed = tryParseJsonFromText(response);
       if (!parsed.ok) {
@@ -476,6 +590,9 @@ app.post('/end-session', (req, res) => {
     sessions.delete(callId);
     console.log(`[${timestamp}] SESSION ENDED: ${callId}`);
   }
+  if (callId && claudeSessions.has(callId)) {
+    claudeSessions.delete(callId);
+  }
 
   res.json({ success: true });
 });
@@ -488,6 +605,9 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'claude-api-server',
+    provider: AGENT_PROVIDER,
+    model: ACTIVE_MODEL,
+    codexWorkspace: AGENT_PROVIDER === 'codex' ? CODEX_WORKSPACE : undefined,
     timestamp: new Date().toISOString()
   });
 });
@@ -498,10 +618,11 @@ app.get('/health', (req, res) => {
  */
 app.get('/', (req, res) => {
   res.json({
-    service: 'Claude HTTP API Server',
+    service: 'Codex Phone API Server',
     version: '1.0.0',
+    provider: AGENT_PROVIDER,
     endpoints: {
-      'POST /ask': 'Send a prompt to Claude',
+      'POST /ask': `Send a prompt to ${AGENT_PROVIDER}`,
       'POST /ask-structured': 'Send a prompt and return validated JSON (n8n)',
       'GET /health': 'Health check'
     }
@@ -511,11 +632,12 @@ app.get('/', (req, res) => {
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(64));
-  console.log('Claude HTTP API Server');
+  console.log('Codex Phone API Server');
   console.log('='.repeat(64));
   console.log(`\nListening on: http://0.0.0.0:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log('\nReady to receive Claude queries from voice interface.\n');
+  console.log(`Provider: ${AGENT_PROVIDER}`);
+  console.log('\nReady to receive voice interface queries.\n');
 });
 
 // Graceful shutdown

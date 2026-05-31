@@ -5,7 +5,7 @@ import path from 'path';
 import { loadConfig, configExists, getInstallationType } from '../config.js';
 import { checkDocker, writeDockerConfig, startContainers } from '../docker.js';
 import { startServer, isServerRunning } from '../process-manager.js';
-import { isClaudeInstalled, sleep } from '../utils.js';
+import { isCodexInstalled, sleep } from '../utils.js';
 import { checkClaudeApiServer } from '../network.js';
 import { runPrereqChecks } from '../prereqs.js';
 
@@ -62,10 +62,10 @@ export async function startCommand() {
  * @returns {Promise<void>}
  */
 async function startApiServer(config) {
-  // Check Claude CLI
-  if (!(await isClaudeInstalled())) {
-    console.log(chalk.yellow('⚠️  Claude CLI not found'));
-    console.log(chalk.gray('  Install from: https://claude.com/download\n'));
+  // Check Codex CLI
+  if (!(await isCodexInstalled())) {
+    console.log(chalk.yellow('⚠️  Codex CLI not found'));
+    console.log(chalk.gray('  Install Codex CLI, then run "codex login"\n'));
   }
 
   // Verify path exists
@@ -236,10 +236,10 @@ async function startBoth(config, isPiMode) {
     }
   }
 
-  // Check Claude CLI only in standard mode (Pi mode connects to API server instead)
-  if (!isPiMode && !(await isClaudeInstalled())) {
-    console.log(chalk.yellow('⚠️  Claude CLI not found'));
-    console.log(chalk.gray('  Install from: https://claude.com/download\n'));
+  // Check Codex CLI only in standard mode (Pi mode connects to API server instead)
+  if (!isPiMode && !(await isCodexInstalled())) {
+    console.log(chalk.yellow('⚠️  Codex CLI not found'));
+    console.log(chalk.gray('  Install Codex CLI, then run "codex login"\n'));
   }
 
   // In Pi mode, verify API server is reachable

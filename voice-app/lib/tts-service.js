@@ -1,5 +1,5 @@
 /**
- * ElevenLabs Text-to-Speech Service
+ * Gemini Text-to-Speech Service
  * Generates speech audio files and returns URLs for FreeSWITCH playback
  */
 
@@ -9,12 +9,13 @@ const path = require('path');
 const crypto = require('crypto');
 const logger = require('./logger');
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
-// Default voice IDs (can be customized)
-const DEFAULT_VOICE_ID = 'JAgnJveGGUh4qy4kh6dF'; // Morpheus voice
-const MODEL_ID = 'eleven_turbo_v2'; // Fast, low-latency model
+// Gemini TTS uses prebuilt voice names such as Kore, Puck, Charon, and Zephyr.
+const DEFAULT_VOICE_NAME = process.env.GEMINI_TTS_VOICE || 'Kore';
+const MODEL_ID = process.env.GEMINI_TTS_MODEL || 'gemini-3.1-flash-tts-preview';
+const SAMPLE_RATE = 24000;
 
 // Audio output directory (set via setAudioDir)
 let audioDir = path.join(__dirname, '../audio-temp');
@@ -42,59 +43,103 @@ function generateFilename(text) {
   // Hash text to create unique identifier
   const hash = crypto.createHash('md5').update(text).digest('hex').substring(0, 8);
   const timestamp = Date.now();
-  return `tts-${timestamp}-${hash}.mp3`;
+  return `tts-${timestamp}-${hash}.wav`;
 }
 
 /**
- * Convert text to speech using ElevenLabs API
+ * Wrap Gemini's raw 16-bit PCM audio in a WAV container.
+ * @param {Buffer} pcmData - Raw PCM audio returned by Gemini
+ * @param {number} sampleRate - Audio sample rate
+ * @returns {Buffer} WAV file bytes
+ */
+function pcmToWav(pcmData, sampleRate = SAMPLE_RATE) {
+  const channels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * channels * bitsPerSample / 8;
+  const blockAlign = channels * bitsPerSample / 8;
+  const header = Buffer.alloc(44);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcmData.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcmData.length, 40);
+
+  return Buffer.concat([header, pcmData]);
+}
+
+/**
+ * Convert text to speech using Gemini API
  * @param {string} text - Text to convert to speech
- * @param {string} voiceId - ElevenLabs voice ID (optional)
+ * @param {string} voiceName - Gemini prebuilt voice name (optional)
  * @returns {Promise<string>} HTTP URL to audio file
  */
-async function generateSpeech(text, voiceId = DEFAULT_VOICE_ID) {
+async function generateSpeech(text, voiceName = DEFAULT_VOICE_NAME) {
   const startTime = Date.now();
 
   try {
-    if (!ELEVENLABS_API_KEY) {
-      throw new Error('ELEVENLABS_API_KEY environment variable not set');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY environment variable not set');
     }
 
-    logger.info('Generating speech with ElevenLabs', {
+    const selectedVoice = voiceName || DEFAULT_VOICE_NAME;
+
+    logger.info('Generating speech with Gemini', {
       textLength: text.length,
-      voiceId,
+      voiceName: selectedVoice,
       model: MODEL_ID
     });
 
-    // Call ElevenLabs API
+    // Gemini TTS returns base64-encoded raw PCM in the first inlineData part.
     const response = await axios({
       method: 'POST',
-      url: `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`,
+      url: `${GEMINI_API_URL}/models/${MODEL_ID}:generateContent`,
       headers: {
-        'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
-        'xi-api-key': ELEVENLABS_API_KEY
+        'x-goog-api-key': GEMINI_API_KEY
       },
       data: {
-        text,
-        model_id: MODEL_ID,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.0,
-          use_speaker_boost: true
+        contents: [{
+          parts: [{ text }]
+        }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: selectedVoice
+              }
+            }
+          }
         }
       },
-      responseType: 'arraybuffer'
+      timeout: 30000
     });
+
+    const base64Audio = response.data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) {
+      throw new Error('Gemini TTS response did not include audio data');
+    }
+
+    const pcmData = Buffer.from(base64Audio, 'base64');
+    const wavData = pcmToWav(pcmData);
 
     // Generate filename and save audio
     const filename = generateFilename(text);
     const filepath = path.join(audioDir, filename);
 
-    fs.writeFileSync(filepath, response.data);
+    fs.writeFileSync(filepath, wavData);
 
     const latency = Date.now() - startTime;
-    const fileSize = response.data.length;
+    const fileSize = wavData.length;
 
     logger.info('Speech generation successful', {
       filename,
@@ -122,12 +167,12 @@ async function generateSpeech(text, voiceId = DEFAULT_VOICE_ID) {
     });
 
     // Handle specific errors
-    if (error.response?.status === 401) {
-      throw new Error('ElevenLabs API authentication failed - check API key');
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      throw new Error('Gemini API authentication failed - check API key');
     } else if (error.response?.status === 429) {
-      throw new Error('ElevenLabs API rate limit exceeded');
+      throw new Error('Gemini API rate limit exceeded');
     } else if (error.response?.status === 400) {
-      throw new Error('Invalid request to ElevenLabs API');
+      throw new Error('Invalid request to Gemini TTS API');
     }
 
     throw new Error(`TTS generation failed: ${error.message}`);
@@ -145,7 +190,7 @@ function cleanupOldFiles(maxAgeMs = 60 * 60 * 1000) {
 
     let deletedCount = 0;
     files.forEach(file => {
-      if (!file.startsWith('tts-') || !file.endsWith('.mp3')) {
+      if (!file.startsWith('tts-') || !file.endsWith('.wav')) {
         return;
       }
 
@@ -169,29 +214,17 @@ function cleanupOldFiles(maxAgeMs = 60 * 60 * 1000) {
 }
 
 /**
- * Get list of available ElevenLabs voices
+ * Get list of available Gemini voices
  * @returns {Promise<Array>} Array of voice objects
  */
 async function getAvailableVoices() {
-  try {
-    if (!ELEVENLABS_API_KEY) {
-      throw new Error('ELEVENLABS_API_KEY environment variable not set');
-    }
-
-    const response = await axios({
-      method: 'GET',
-      url: `${ELEVENLABS_API_URL}/voices`,
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY
-      }
-    });
-
-    return response.data.voices;
-
-  } catch (error) {
-    logger.error('Failed to fetch available voices', { error: error.message });
-    throw error;
-  }
+  return [
+    'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda',
+    'Orus', 'Aoede', 'Callirrhoe', 'Autonoe', 'Enceladus', 'Iapetus',
+    'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib', 'Rasalgethi',
+    'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima',
+    'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat'
+  ].map(name => ({ name, voiceId: name }));
 }
 
 // Initialize audio directory
@@ -206,5 +239,6 @@ module.exports = {
   generateSpeech,
   setAudioDir,
   cleanupOldFiles,
-  getAvailableVoices
+  getAvailableVoices,
+  pcmToWav
 };

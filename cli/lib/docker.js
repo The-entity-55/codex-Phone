@@ -183,6 +183,11 @@ export function generateEnvFile(config) {
     claudeApiUrl = `http://localhost:${config.server.claudeApiPort}`;
   }
 
+  const geminiConfig = config.api?.gemini || {};
+  const legacyElevenLabsConfig = config.api?.elevenlabs || {};
+  const geminiApiKey = geminiConfig.apiKey || legacyElevenLabsConfig.apiKey || '';
+  const geminiVoiceName = config.devices[0].voiceId || geminiConfig.defaultVoiceName || legacyElevenLabsConfig.defaultVoiceId || 'Kore';
+
   const lines = [
     '# ====================================',
     '# WARNING: DO NOT SHARE THIS FILE',
@@ -220,9 +225,10 @@ export function generateEnvFile(config) {
     '# Claude API Server',
     `CLAUDE_API_URL=${claudeApiUrl}`,
     '',
-    '# ElevenLabs TTS',
-    `ELEVENLABS_API_KEY=${config.api.elevenlabs.apiKey}`,
-    `ELEVENLABS_VOICE_ID=${config.devices[0].voiceId}`,
+    '# Gemini TTS',
+    `GEMINI_API_KEY=${geminiApiKey}`,
+    `GEMINI_TTS_VOICE=${geminiVoiceName}`,
+    `GEMINI_TTS_MODEL=${geminiConfig.model || 'gemini-3.1-flash-tts-preview'}`,
     '',
     '# OpenAI (Whisper STT)',
     `OPENAI_API_KEY=${config.api.openai.apiKey}`,

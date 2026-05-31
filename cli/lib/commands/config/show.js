@@ -40,8 +40,8 @@ export async function configShowCommand() {
 
   // API Keys
   console.log(chalk.bold('API Keys:'));
-  console.log(chalk.gray(`  OpenAI API Key: ${redactValue(config.apiKeys.openai)}`));
-  console.log(chalk.gray(`  ElevenLabs API Key: ${redactValue(config.apiKeys.elevenlabs)}`));
+  console.log(chalk.gray(`  OpenAI API Key: ${redactValue(config.api?.openai?.apiKey)}`));
+  console.log(chalk.gray(`  Gemini API Key: ${redactValue(config.api?.gemini?.apiKey || config.api?.elevenlabs?.apiKey)}`));
 
   // 3CX Configuration
   console.log(chalk.bold('\n3CX Configuration:'));
@@ -64,7 +64,7 @@ export async function configShowCommand() {
       console.log(chalk.gray(`  • ${device.name} (extension ${device.extension})`));
       console.log(chalk.gray(`    Auth ID: ${device.authId}`));
       console.log(chalk.gray(`    Password: ${redactValue(device.password)}`));
-      console.log(chalk.gray(`    Voice ID: ${device.voiceId}`));
+      console.log(chalk.gray(`    Gemini Voice: ${device.voiceId}`));
       if (device.prompt) {
         const shortPrompt = device.prompt.length > 50
           ? device.prompt.slice(0, 50) + '...'

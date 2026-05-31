@@ -5,17 +5,17 @@ import axios from 'axios';
 import { loadConfig, configExists, getInstallationType } from '../config.js';
 import { checkDocker, getContainerStatus } from '../docker.js';
 import { isServerRunning, getServerPid } from '../process-manager.js';
-import { validateElevenLabsKey, validateOpenAIKey } from '../validators.js';
+import { validateGeminiKey, validateOpenAIKey } from '../validators.js';
 import { isReachable, checkClaudeApiServer as checkClaudeApiHealth } from '../network.js';
 import { checkPort } from '../port-check.js';
 
 /**
- * Check if Claude CLI is installed
+ * Check if Codex CLI is installed
  * @returns {Promise<{installed: boolean, version?: string, error?: string}>}
  */
-async function checkClaudeCLI() {
+async function checkCodexCLI() {
   return new Promise((resolve) => {
-    const child = spawn('claude', ['--version'], {
+    const child = spawn('codex', ['--version'], {
       stdio: 'pipe'
     });
 
@@ -39,7 +39,7 @@ async function checkClaudeCLI() {
       } else {
         resolve({
           installed: false,
-          error: 'Claude CLI not found in PATH'
+          error: 'Codex CLI not found in PATH'
         });
       }
     });
@@ -47,20 +47,20 @@ async function checkClaudeCLI() {
     child.on('error', () => {
       resolve({
         installed: false,
-        error: 'Claude CLI not found'
+        error: 'Codex CLI not found'
       });
     });
   });
 }
 
 /**
- * Check ElevenLabs API connectivity
- * @param {string} apiKey - ElevenLabs API key
+ * Check Gemini API connectivity
+ * @param {string} apiKey - Gemini API key
  * @returns {Promise<{connected: boolean, error?: string}>}
  */
-async function checkElevenLabsAPI(apiKey) {
+async function checkGeminiAPI(apiKey) {
   try {
-    const result = await validateElevenLabsKey(apiKey);
+    const result = await validateGeminiKey(apiKey);
     if (result.valid) {
       return { connected: true };
     } else {
@@ -230,17 +230,17 @@ async function runApiServerChecks(config) {
   const checks = [];
   let passedCount = 0;
 
-  // Check Claude CLI
-  const claudeSpinner = ora('Checking Claude CLI...').start();
-  const claudeResult = await checkClaudeCLI();
-  if (claudeResult.installed) {
-    claudeSpinner.succeed(chalk.green(`Claude CLI installed (v${claudeResult.version})`));
+  // Check Codex CLI
+  const codexSpinner = ora('Checking Codex CLI...').start();
+  const codexResult = await checkCodexCLI();
+  if (codexResult.installed) {
+    codexSpinner.succeed(chalk.green(`Codex CLI installed (v${codexResult.version})`));
     passedCount++;
   } else {
-    claudeSpinner.fail(chalk.red(`Claude CLI not found: ${claudeResult.error}`));
-    console.log(chalk.gray('  → Install Claude CLI: npm install -g @anthropic-ai/claude\n'));
+    codexSpinner.fail(chalk.red(`Codex CLI not found: ${codexResult.error}`));
+    console.log(chalk.gray('  → Install Codex CLI, then run "codex login"\n'));
   }
-  checks.push({ name: 'Claude CLI', passed: claudeResult.installed });
+  checks.push({ name: 'Codex CLI', passed: codexResult.installed });
 
   // Check local Claude API server
   const apiServerSpinner = ora('Checking Claude API server...').start();
@@ -283,18 +283,19 @@ async function runVoiceServerChecks(config, isPiSplit) {
   }
   checks.push({ name: 'Docker', passed: dockerResult.installed && dockerResult.running });
 
-  // Check ElevenLabs API (only if configured)
-  if (config.api && config.api.elevenlabs && config.api.elevenlabs.apiKey) {
-    const elevenLabsSpinner = ora('Checking ElevenLabs API...').start();
-    const elevenLabsResult = await checkElevenLabsAPI(config.api.elevenlabs.apiKey);
-    if (elevenLabsResult.connected) {
-      elevenLabsSpinner.succeed(chalk.green('ElevenLabs API connected'));
+  // Check Gemini API (only if configured)
+  const geminiApiKey = config.api?.gemini?.apiKey || config.api?.elevenlabs?.apiKey;
+  if (geminiApiKey) {
+    const geminiSpinner = ora('Checking Gemini API...').start();
+    const geminiResult = await checkGeminiAPI(geminiApiKey);
+    if (geminiResult.connected) {
+      geminiSpinner.succeed(chalk.green('Gemini API connected'));
       passedCount++;
     } else {
-      elevenLabsSpinner.fail(chalk.red(`ElevenLabs API failed: ${elevenLabsResult.error}`));
+      geminiSpinner.fail(chalk.red(`Gemini API failed: ${geminiResult.error}`));
       console.log(chalk.gray('  → Check your API key in ~/.claude-phone/config.json\n'));
     }
-    checks.push({ name: 'ElevenLabs API', passed: elevenLabsResult.connected });
+    checks.push({ name: 'Gemini API', passed: geminiResult.connected });
   }
 
   // Check OpenAI API (only if configured)

@@ -1,11 +1,19 @@
 import axios from 'axios';
 
+const GEMINI_VOICE_NAMES = new Set([
+  'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda',
+  'Orus', 'Aoede', 'Callirrhoe', 'Autonoe', 'Enceladus', 'Iapetus',
+  'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib', 'Rasalgethi',
+  'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima',
+  'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat'
+]);
+
 /**
- * Validate ElevenLabs API key by making a test request
- * @param {string} apiKey - ElevenLabs API key
+ * Validate Gemini API key by making a test request
+ * @param {string} apiKey - Gemini API key
  * @returns {Promise<{valid: boolean, error?: string}>} Validation result
  */
-export async function validateElevenLabsKey(apiKey) {
+export async function validateGeminiKey(apiKey) {
   if (!apiKey || apiKey.trim() === '') {
     return {
       valid: false,
@@ -14,9 +22,9 @@ export async function validateElevenLabsKey(apiKey) {
   }
 
   try {
-    const response = await axios.get('https://api.elevenlabs.io/v1/voices', {
+    const response = await axios.get('https://generativelanguage.googleapis.com/v1beta/models', {
       headers: {
-        'xi-api-key': apiKey
+        'x-goog-api-key': apiKey
       },
       timeout: 10000
     });
@@ -37,6 +45,12 @@ export async function validateElevenLabsKey(apiKey) {
           error: 'Invalid API key (401 Unauthorized)'
         };
       }
+      if (error.response.status === 403) {
+        return {
+          valid: false,
+          error: 'Invalid API key or Gemini API access denied (403 Forbidden)'
+        };
+      }
       return {
         valid: false,
         error: `API error: ${error.response.status} ${error.response.statusText}`
@@ -55,6 +69,15 @@ export async function validateElevenLabsKey(apiKey) {
       error: `Network error: ${error.message}`
     };
   }
+}
+
+/**
+ * Backwards-compatible alias for older imports/tests.
+ * @param {string} apiKey - Gemini API key
+ * @returns {Promise<{valid: boolean, error?: string}>} Validation result
+ */
+export async function validateElevenLabsKey(apiKey) {
+  return validateGeminiKey(apiKey);
 }
 
 /**
@@ -152,68 +175,31 @@ export function validateHostname(hostname) {
 }
 
 /**
- * Validate ElevenLabs voice ID
- * @param {string} apiKey - ElevenLabs API key
- * @param {string} voiceId - Voice ID to validate
+ * Validate Gemini voice name
+ * @param {string} apiKey - Unused, kept for call-site compatibility
+ * @param {string} voiceId - Gemini voice name to validate
  * @returns {Promise<{valid: boolean, name?: string, error?: string}>} Validation result
  */
 export async function validateVoiceId(apiKey, voiceId) {
+  void apiKey;
+
   if (!voiceId || voiceId.trim() === '') {
     return {
       valid: false,
-      error: 'Voice ID cannot be empty'
+      error: 'Voice name cannot be empty'
     };
   }
 
-  try {
-    const response = await axios.get(`https://api.elevenlabs.io/v1/voices/${voiceId}`, {
-      headers: {
-        'xi-api-key': apiKey
-      },
-      timeout: 10000
-    });
-
-    if (response.status === 200 && response.data.name) {
-      return {
-        valid: true,
-        name: response.data.name
-      };
-    }
-
+  const normalized = voiceId.trim();
+  if (GEMINI_VOICE_NAMES.has(normalized)) {
     return {
-      valid: false,
-      error: `Unexpected response: ${response.status}`
-    };
-  } catch (error) {
-    if (error.response) {
-      if (error.response.status === 404) {
-        return {
-          valid: false,
-          error: 'Voice ID not found'
-        };
-      }
-      if (error.response.status === 401) {
-        return {
-          valid: false,
-          error: 'Invalid API key (cannot validate voice ID)'
-        };
-      }
-      return {
-        valid: false,
-        error: `API error: ${error.response.status} ${error.response.statusText}`
-      };
-    }
-
-    if (error.code === 'ECONNABORTED') {
-      return {
-        valid: false,
-        error: 'Request timeout - check your internet connection'
-      };
-    }
-
-    return {
-      valid: false,
-      error: `Network error: ${error.message}`
+      valid: true,
+      name: normalized
     };
   }
+
+  return {
+    valid: false,
+    error: `Unknown Gemini voice "${voiceId}". Try Kore, Puck, Charon, or Zephyr.`
+  };
 }

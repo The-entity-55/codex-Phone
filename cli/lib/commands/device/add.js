@@ -74,11 +74,11 @@ export async function deviceAddCommand() {
     {
       type: 'input',
       name: 'voiceId',
-      message: 'ElevenLabs voice ID:',
-      default: config.api.elevenlabs.defaultVoiceId || '',
+      message: 'Gemini voice name:',
+      default: config.api?.gemini?.defaultVoiceName || config.api?.elevenlabs?.defaultVoiceId || 'Kore',
       validate: (input) => {
         if (!input || input.trim() === '') {
-          return 'Voice ID cannot be empty';
+          return 'Voice name cannot be empty';
         }
         return true;
       }
@@ -91,13 +91,13 @@ export async function deviceAddCommand() {
     }
   ]);
 
-  // Validate voice ID with ElevenLabs API
-  const spinner = ora('Validating voice ID with ElevenLabs...').start();
-  const voiceResult = await validateVoiceId(config.api.elevenlabs.apiKey, answers.voiceId);
+  // Validate voice name against Gemini's supported prebuilt voices.
+  const spinner = ora('Validating Gemini voice name...').start();
+  const voiceResult = await validateVoiceId(config.api?.gemini?.apiKey, answers.voiceId);
 
   if (!voiceResult.valid) {
-    spinner.fail(chalk.red(`Voice ID validation failed: ${voiceResult.error}`));
-    console.log(chalk.gray('\nPlease check your voice ID and try again.\n'));
+    spinner.fail(chalk.red(`Voice name validation failed: ${voiceResult.error}`));
+    console.log(chalk.gray('\nPlease check your Gemini voice name and try again.\n'));
     process.exit(1);
   }
 
@@ -128,7 +128,7 @@ export async function deviceAddCommand() {
   console.log(chalk.gray('\nDevice details:'));
   console.log(chalk.gray(`  Name: ${newDevice.name}`));
   console.log(chalk.gray(`  Extension: ${newDevice.extension}`));
-  console.log(chalk.gray(`  Voice: ${voiceResult.name} (${newDevice.voiceId})`));
+  console.log(chalk.gray(`  Voice: ${voiceResult.name}`));
   console.log(chalk.yellow('\n⚠ Restart services to apply changes:'));
   console.log(chalk.gray('  claude-phone stop'));
   console.log(chalk.gray('  claude-phone start\n'));
