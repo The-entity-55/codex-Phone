@@ -16,7 +16,7 @@ claude-phone logs     # View recent logs
 
 ### "API key validation failed"
 
-**Symptom:** Setup fails when validating ElevenLabs or OpenAI key.
+**Symptom:** Setup fails when validating the Gemini key.
 
 **Causes & Solutions:**
 
@@ -27,14 +27,10 @@ claude-phone logs     # View recent logs
 | Account suspended | Check account status on provider dashboard |
 | Network issue | Check internet connectivity |
 
-**For OpenAI specifically:**
-- New accounts need billing enabled before API works
-- Free tier credits expire after 3 months
-- Check [platform.openai.com/account/billing](https://platform.openai.com/account/billing)
-
-**For ElevenLabs:**
-- Free tier has limited characters/month
-- Check [elevenlabs.io/subscription](https://elevenlabs.io/subscription)
+**For Gemini:**
+- Make sure the key comes from Google AI Studio
+- Check that Gemini API access is enabled for the key
+- Check quota and billing in your Google account if requests are rejected
 
 ### "Can't detect 3CX SBC"
 
@@ -183,7 +179,7 @@ claude-phone start
    claude-phone logs voice-app | grep -i error
    ```
 
-### Whisper transcription errors
+### Gemini transcription errors
 
 **Symptom:** Claude responds to wrong words or doesn't understand speech.
 
@@ -191,17 +187,17 @@ claude-phone start
 
 | Cause | Solution |
 |-------|----------|
-| OpenAI billing exhausted | Add credits to OpenAI account |
+| Gemini quota or billing exhausted | Check Gemini API quota and billing |
 | Audio quality poor | Check microphone, reduce background noise |
 | Network latency | Audio chunks may be lost; check connection |
 
-### ElevenLabs TTS errors
+### Gemini TTS errors
 
 **Symptom:** Claude's responses aren't spoken, or voice sounds wrong.
 
 **Solutions:**
-1. Check ElevenLabs character quota isn't exhausted
-2. Verify voice ID is valid: `claude-phone device list`
+1. Check Gemini API quota isn't exhausted
+2. Verify voice name is valid: `claude-phone device list`
 3. Check API key still works
 
 ### Calls disconnect after a few seconds

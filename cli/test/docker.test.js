@@ -155,6 +155,10 @@ test('docker compose generation', async (t) => {
       'Should write Gemini API key');
     assert.ok(envFile.includes('GEMINI_TTS_VOICE=voice-id'),
       'Should write Gemini voice name');
+    assert.ok(envFile.includes('GEMINI_STT_MODEL=gemini-2.5-flash'),
+      'Should write Gemini STT model');
+    assert.ok(!envFile.includes('OPENAI_API_KEY='),
+      'Should not write OpenAI API key for STT');
     assert.ok(!envFile.includes('CLAUDE_API_URL=http://localhost:'),
       'Should not use localhost for pi-split mode');
   });

@@ -21,14 +21,14 @@ describe('Doctor command', () => {
     assert.ok(claudeCheck.version);
   });
 
-  it('should check ElevenLabs API connectivity', async () => {
-    // Mock test for ElevenLabs API check
+  it('should check Gemini API connectivity', async () => {
+    // Mock test for Gemini API check
     const apiCheck = { connected: true };
     assert.strictEqual(apiCheck.connected, true);
   });
 
-  it('should check OpenAI API connectivity', async () => {
-    // Mock test for OpenAI API check
+  it('should use Gemini for speech services', async () => {
+    // Mock test for Gemini TTS/STT check
     const apiCheck = { connected: true };
     assert.strictEqual(apiCheck.connected, true);
   });

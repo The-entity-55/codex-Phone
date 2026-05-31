@@ -5,7 +5,7 @@ import axios from 'axios';
 import { loadConfig, configExists, getInstallationType } from '../config.js';
 import { checkDocker, getContainerStatus } from '../docker.js';
 import { isServerRunning, getServerPid } from '../process-manager.js';
-import { validateGeminiKey, validateOpenAIKey } from '../validators.js';
+import { validateGeminiKey } from '../validators.js';
 import { isReachable, checkClaudeApiServer as checkClaudeApiHealth } from '../network.js';
 import { checkPort } from '../port-check.js';
 
@@ -61,24 +61,6 @@ async function checkCodexCLI() {
 async function checkGeminiAPI(apiKey) {
   try {
     const result = await validateGeminiKey(apiKey);
-    if (result.valid) {
-      return { connected: true };
-    } else {
-      return { connected: false, error: result.error };
-    }
-  } catch (error) {
-    return { connected: false, error: error.message };
-  }
-}
-
-/**
- * Check OpenAI API connectivity
- * @param {string} apiKey - OpenAI API key
- * @returns {Promise<{connected: boolean, error?: string}>}
- */
-async function checkOpenAIAPI(apiKey) {
-  try {
-    const result = await validateOpenAIKey(apiKey);
     if (result.valid) {
       return { connected: true };
     } else {
@@ -296,20 +278,6 @@ async function runVoiceServerChecks(config, isPiSplit) {
       console.log(chalk.gray('  → Check your API key in ~/.claude-phone/config.json\n'));
     }
     checks.push({ name: 'Gemini API', passed: geminiResult.connected });
-  }
-
-  // Check OpenAI API (only if configured)
-  if (config.api && config.api.openai && config.api.openai.apiKey) {
-    const openAISpinner = ora('Checking OpenAI API...').start();
-    const openAIResult = await checkOpenAIAPI(config.api.openai.apiKey);
-    if (openAIResult.connected) {
-      openAISpinner.succeed(chalk.green('OpenAI API connected'));
-      passedCount++;
-    } else {
-      openAISpinner.fail(chalk.red(`OpenAI API failed: ${openAIResult.error}`));
-      console.log(chalk.gray('  → Check your API key in ~/.claude-phone/config.json\n'));
-    }
-    checks.push({ name: 'OpenAI API', passed: openAIResult.connected });
   }
 
   // Check Voice-app container

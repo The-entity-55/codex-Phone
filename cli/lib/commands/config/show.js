@@ -40,7 +40,6 @@ export async function configShowCommand() {
 
   // API Keys
   console.log(chalk.bold('API Keys:'));
-  console.log(chalk.gray(`  OpenAI API Key: ${redactValue(config.api?.openai?.apiKey)}`));
   console.log(chalk.gray(`  Gemini API Key: ${redactValue(config.api?.gemini?.apiKey || config.api?.elevenlabs?.apiKey)}`));
 
   // 3CX Configuration

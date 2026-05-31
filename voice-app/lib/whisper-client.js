@@ -1,31 +1,17 @@
 /**
- * OpenAI Whisper API Client for Speech-to-Text
+ * Gemini Speech-to-Text Client
  * Converts audio buffers (L16 PCM from FreeSWITCH) to text
  */
 
-const OpenAI = require("openai");
+const axios = require("axios");
 const WaveFile = require("wavefile").WaveFile;
-const fs = require("fs");
-const path = require("path");
 
-// Lazy-initialized OpenAI client
-let openai = null;
-
-function getOpenAIClient() {
-  if (!openai) {
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn("[WHISPER] OPENAI_API_KEY not set - STT will not work");
-      return null;
-    }
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-  }
-  return openai;
-}
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta";
+const GEMINI_STT_MODEL = process.env.GEMINI_STT_MODEL || "gemini-2.5-flash";
 
 /**
- * Convert L16 PCM buffer to WAV format for Whisper API
+ * Convert L16 PCM buffer to WAV format for Gemini API
  * @param {Buffer} pcmBuffer - Raw L16 PCM audio data
  * @param {number} sampleRate - Sample rate (default: 8000 Hz for telephony)
  * @returns {Buffer} WAV file buffer
@@ -43,7 +29,7 @@ function pcmToWav(pcmBuffer, sampleRate = 8000) {
 }
 
 /**
- * Transcribe audio using OpenAI Whisper API
+ * Transcribe audio using Gemini audio understanding
  * @param {Buffer} audioBuffer - Audio data (either WAV or raw PCM)
  * @param {Object} options - Transcription options
  * @param {string} options.format - Input format: "wav" or "pcm" (default: "pcm")
@@ -58,9 +44,8 @@ async function transcribe(audioBuffer, options = {}) {
     language = "en"
   } = options;
 
-  const client = getOpenAIClient();
-  if (!client) {
-    throw new Error("OpenAI API key not configured");
+  if (!GEMINI_API_KEY) {
+    throw new Error("Gemini API key not configured");
   }
 
   // Convert PCM to WAV if needed
@@ -71,38 +56,55 @@ async function transcribe(audioBuffer, options = {}) {
     wavBuffer = audioBuffer;
   }
 
-  // Write to temp file (Whisper API requires a file)
-  const tempFile = path.join("/tmp", "whisper-" + Date.now() + ".wav");
-  fs.writeFileSync(tempFile, wavBuffer);
+  const prompt = language && language !== "auto"
+    ? `Transcribe the speech in this audio. The expected language is ${language}. Return only the spoken words as plain text. If there is no clear speech, return an empty string.`
+    : "Transcribe the speech in this audio. Return only the spoken words as plain text. If there is no clear speech, return an empty string.";
 
-  try {
-    const transcription = await client.audio.transcriptions.create({
-      file: fs.createReadStream(tempFile),
-      model: "whisper-1",
-      language: language,
-      response_format: "text"
-    });
+  const response = await axios({
+    method: "POST",
+    url: `${GEMINI_API_URL}/models/${GEMINI_STT_MODEL}:generateContent`,
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY
+    },
+    data: {
+      contents: [{
+        parts: [
+          {
+            inlineData: {
+              mimeType: "audio/wav",
+              data: wavBuffer.toString("base64")
+            }
+          },
+          { text: prompt }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0
+      }
+    },
+    timeout: 30000
+  });
 
-    const timestamp = new Date().toISOString();
-    console.log("[" + timestamp + "] WHISPER Transcribed: " + transcription.substring(0, 100) + (transcription.length > 100 ? "..." : ""));
+  const parts = response.data?.candidates?.[0]?.content?.parts || [];
+  const transcription = parts
+    .map(part => part.text || "")
+    .join("")
+    .trim()
+    .replace(/^["']|["']$/g, "");
 
-    return transcription;
-  } finally {
-    // Clean up temp file
-    try {
-      fs.unlinkSync(tempFile);
-    } catch (e) {
-      // Ignore cleanup errors
-    }
-  }
+  const timestamp = new Date().toISOString();
+  console.log("[" + timestamp + "] GEMINI STT Transcribed: " + transcription.substring(0, 100) + (transcription.length > 100 ? "..." : ""));
+
+  return transcription;
 }
 
 /**
- * Check if Whisper API is configured and available
+ * Check if Gemini STT is configured and available
  * @returns {boolean} True if API key is set
  */
 function isAvailable() {
-  return !!process.env.OPENAI_API_KEY;
+  return !!GEMINI_API_KEY;
 }
 
 module.exports = {

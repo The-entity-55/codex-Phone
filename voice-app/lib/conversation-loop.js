@@ -5,7 +5,7 @@
  * Features:
  * - VAD-based speech detection
  * - DTMF # key to end speech early
- * - Whisper transcription
+ * - Gemini transcription
  * - Claude API integration
  * - TTS response generation
  * - Turn-taking audio cues (beeps)
@@ -115,7 +115,7 @@ function extractVoiceLine(response) {
  * @param {string} callUuid - Unique call identifier
  * @param {Object} options - Configuration options
  * @param {Object} options.audioForkServer - WebSocket audio fork server
- * @param {Object} options.whisperClient - Whisper transcription client
+ * @param {Object} options.whisperClient - Speech-to-text client
  * @param {Object} options.claudeBridge - Claude API bridge
  * @param {Object} options.ttsService - TTS service
  * @param {number} options.wsPort - WebSocket port

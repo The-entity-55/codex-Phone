@@ -18,8 +18,7 @@ Claude Phone gives your Codex installation a phone number. You can:
 | Requirement | Where to Get It | Notes |
 |-------------|-----------------|-------|
 | **3CX Cloud Account** | [3cx.com](https://www.3cx.com/) | Free tier works |
-| **Gemini API Key** | [aistudio.google.com](https://aistudio.google.com/) | For text-to-speech |
-| **OpenAI API Key** | [platform.openai.com](https://platform.openai.com/) | For Whisper speech-to-text |
+| **Gemini API Key** | [aistudio.google.com](https://aistudio.google.com/) | For text-to-speech and speech-to-text |
 | **Codex CLI** | [developers.openai.com/codex](https://developers.openai.com/codex) | Agent backend for voice requests |
 
 ## Platform Support

@@ -12,7 +12,6 @@ import {
 } from '../config.js';
 import {
   validateGeminiKey,
-  validateOpenAIKey,
   validateVoiceId,
   validateExtension,
   validateIP,
@@ -457,7 +456,7 @@ async function setupPi(config) {
   if (config.deployment && config.deployment.mode === 'standard') {
     console.log(chalk.yellow('\n⚠️  Detected existing standard configuration'));
     console.log(chalk.gray('Your config will be migrated to Pi split-mode while preserving:'));
-    console.log(chalk.gray('  • API keys (Gemini, OpenAI)'));
+    console.log(chalk.gray('  • API key (Gemini for TTS/STT)'));
     console.log(chalk.gray('  • Device configurations'));
     console.log(chalk.gray('  • SIP settings\n'));
 
@@ -669,8 +668,7 @@ function createDefaultConfig() {
   return {
     version: '1.0.0',
     api: {
-      gemini: { apiKey: '', defaultVoiceName: 'Kore', validated: false },
-      openai: { apiKey: '', validated: false }
+      gemini: { apiKey: '', defaultVoiceName: 'Kore', validated: false }
     },
     sip: {
       domain: '',
@@ -714,10 +712,6 @@ function mergeConfigDefaults(existingConfig) {
       gemini: {
         ...defaults.api.gemini,
         ...existingConfig.api?.gemini
-      },
-      openai: {
-        ...defaults.api.openai,
-        ...existingConfig.api?.openai
       }
     },
     sip: {
@@ -752,14 +746,12 @@ async function setupAPIKeys(config) {
     defaultVoiceName: config.api.elevenlabs?.defaultVoiceId || 'Kore',
     validated: config.api.elevenlabs?.validated || false
   };
-  config.api.openai = config.api.openai || { apiKey: '', validated: false };
-
   // Gemini API Key
   const geminiAnswers = await inquirer.prompt([
     {
       type: 'password',
       name: 'apiKey',
-      message: 'Gemini API key (for TTS):',
+      message: 'Gemini API key (for TTS and STT):',
       default: config.api.gemini.apiKey,
       validate: (input) => {
         if (!input || input.trim() === '') {
@@ -836,48 +828,6 @@ async function setupAPIKeys(config) {
   } else {
     voiceSpinner.succeed(`Voice name validated: ${voiceValidation.name}`);
     config.api.gemini.defaultVoiceName = defaultVoiceName;
-  }
-
-  // OpenAI API Key
-  const openAIAnswers = await inquirer.prompt([
-    {
-      type: 'password',
-      name: 'apiKey',
-      message: 'OpenAI API key (for Whisper STT):',
-      default: config.api.openai.apiKey,
-      validate: (input) => {
-        if (!input || input.trim() === '') {
-          return 'API key is required';
-        }
-        return true;
-      }
-    }
-  ]);
-
-  const openAIKey = openAIAnswers.apiKey;
-  const openAISpinner = ora('Validating OpenAI API key...').start();
-
-  const openAIResult = await validateOpenAIKey(openAIKey);
-  if (!openAIResult.valid) {
-    openAISpinner.fail(`Invalid OpenAI API key: ${openAIResult.error}`);
-    console.log(chalk.yellow('\n⚠️  You can continue setup, but the key may not work.'));
-    const { continueAnyway } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'continueAnyway',
-        message: 'Continue anyway?',
-        default: false
-      }
-    ]);
-
-    if (!continueAnyway) {
-      throw new Error('Setup cancelled due to invalid API key');
-    }
-
-    config.api.openai = { apiKey: openAIKey, validated: false };
-  } else {
-    openAISpinner.succeed('OpenAI API key validated');
-    config.api.openai = { apiKey: openAIKey, validated: true };
   }
 
   return config;
