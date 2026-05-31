@@ -5,7 +5,7 @@ import path from 'path';
 import { loadConfig, configExists, getInstallationType } from '../config.js';
 import { checkDocker, writeDockerConfig, startContainers } from '../docker.js';
 import { startServer, isServerRunning } from '../process-manager.js';
-import { isCodexInstalled, sleep } from '../utils.js';
+import { getProjectRoot, isCodexInstalled, sleep } from '../utils.js';
 import { checkClaudeApiServer } from '../network.js';
 import { runPrereqChecks } from '../prereqs.js';
 
@@ -25,6 +25,7 @@ export async function startCommand() {
 
   // Load config and get installation type
   const config = await loadConfig();
+  applyPathDefaults(config);
   const installationType = getInstallationType(config);
   const isPiMode = config.deployment?.mode === 'pi-split';
 
@@ -54,6 +55,29 @@ export async function startCommand() {
       await startBoth(config, isPiMode);
       break;
   }
+}
+
+/**
+ * Fill in path defaults for older or minimal config files.
+ * @param {object} config - Loaded configuration
+ * @returns {object} Config with path defaults
+ */
+function applyPathDefaults(config) {
+  const projectRoot = getProjectRoot();
+  config.server = {
+    claudeApiPort: 3333,
+    httpPort: 3000,
+    externalIp: 'auto',
+    ...config.server
+  };
+
+  config.paths = {
+    voiceApp: path.join(projectRoot, 'voice-app'),
+    claudeApiServer: path.join(projectRoot, 'claude-api-server'),
+    ...config.paths
+  };
+
+  return config;
 }
 
 /**

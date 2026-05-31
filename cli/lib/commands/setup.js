@@ -152,7 +152,7 @@ export async function setupCommand(options = {}) {
  */
 async function setupInstallationType(installationType, existingConfig, isPi, options) {
   // Load existing config or create default
-  const baseConfig = existingConfig || createDefaultConfig();
+  const baseConfig = mergeConfigDefaults(existingConfig);
 
   // Run type-specific prereq checks (unless skipped)
   if (!options.skipPrereqs && installationType !== 'api-server') {
@@ -691,6 +691,52 @@ function createDefaultConfig() {
       voiceApp: path.join(getProjectRoot(), 'voice-app'),
       claudeApiServer: path.join(getProjectRoot(), 'claude-api-server')
     }
+  };
+}
+
+/**
+ * Merge an existing config with current defaults for backward compatibility.
+ * @param {object|null} existingConfig - Existing config from disk
+ * @returns {object} Config with required default sections
+ */
+function mergeConfigDefaults(existingConfig) {
+  const defaults = createDefaultConfig();
+  if (!existingConfig) {
+    return defaults;
+  }
+
+  return {
+    ...defaults,
+    ...existingConfig,
+    api: {
+      ...defaults.api,
+      ...existingConfig.api,
+      gemini: {
+        ...defaults.api.gemini,
+        ...existingConfig.api?.gemini
+      },
+      openai: {
+        ...defaults.api.openai,
+        ...existingConfig.api?.openai
+      }
+    },
+    sip: {
+      ...defaults.sip,
+      ...existingConfig.sip
+    },
+    server: {
+      ...defaults.server,
+      ...existingConfig.server
+    },
+    secrets: {
+      ...defaults.secrets,
+      ...existingConfig.secrets
+    },
+    paths: {
+      ...defaults.paths,
+      ...existingConfig.paths
+    },
+    devices: existingConfig.devices || defaults.devices
   };
 }
 
