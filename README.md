@@ -36,12 +36,12 @@ Claude Phone gives your Codex installation a phone number. You can:
 
 **macOS/Linux:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/theNetworkChuck/claude-phone/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/The-entity-55/codex-Phone/main/install.sh | bash
 ```
 
 **Windows PowerShell (experimental):**
 ```powershell
-irm https://raw.githubusercontent.com/theNetworkChuck/claude-phone/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/The-entity-55/codex-Phone/main/install.ps1 | iex
 ```
 
 The installer will:

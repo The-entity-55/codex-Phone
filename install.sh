@@ -5,7 +5,7 @@ set -e
 # Usage: curl -sSL https://raw.githubusercontent.com/.../install.sh | bash
 
 INSTALL_DIR="$HOME/.claude-phone-cli"
-REPO_URL="https://github.com/theNetworkChuck/claude-phone.git"
+REPO_URL="https://github.com/The-entity-55/codex-Phone.git"
 
 echo "🎯 Claude Phone CLI Installer"
 echo ""
@@ -218,6 +218,7 @@ echo ""
 if [ -d "$INSTALL_DIR" ]; then
   echo "Updating existing installation..."
   cd "$INSTALL_DIR"
+  git remote set-url origin "$REPO_URL"
   git pull origin main
 else
   echo "Cloning Claude Phone..."

@@ -3,7 +3,7 @@
 $ErrorActionPreference = "Stop"
 
 $InstallDir = Join-Path $env:USERPROFILE ".claude-phone-cli"
-$RepoUrl = "https://github.com/theNetworkChuck/claude-phone.git"
+$RepoUrl = "https://github.com/The-entity-55/codex-Phone.git"
 $CliDir = Join-Path $InstallDir "cli"
 
 Write-Host ""
@@ -35,6 +35,7 @@ if (-not (Get-Command "codex" -ErrorAction SilentlyContinue)) {
 
 if (Test-Path $InstallDir) {
   Write-Host "Updating existing installation..."
+  git -C $InstallDir remote set-url origin $RepoUrl
   git -C $InstallDir pull
 } else {
   Write-Host "Cloning Claude Phone..."
